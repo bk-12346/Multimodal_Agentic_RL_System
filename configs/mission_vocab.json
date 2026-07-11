@@ -1,0 +1,21 @@
+{
+  "vocab": {
+    "<pad>": 0,
+    "<unk>": 1,
+    "go": 2,
+    "get": 3,
+    "a": 4,
+    "blue": 5,
+    "key": 6,
+    "you": 7,
+    "must": 8,
+    "fetch": 9,
+    "purple": 10,
+    "green": 11,
+    "ball": 12,
+    "grey": 13,
+    "red": 14,
+    "yellow": 15
+  },
+  "max_len": 6
+}

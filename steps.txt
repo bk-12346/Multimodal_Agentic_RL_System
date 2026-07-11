@@ -1,0 +1,13 @@
+--> training/00_env_check
+--> training/01__train_ppo_baseline
+--> evaluation/01_eval_baseline.py
+
+--> training/02_fetch_env_check
+- to get to know what are the statements/instructions that the robot can do
+- we get to know from the results that they have different wordings like 'go get a', 'go fetch a' etc.
+- variable pattern but a clear wrapping pattern of 'color' + 'object'
+- better to not hardcode a guessed vocab
+- so build it properly from the env itself so nothingbreaks later when MiniGrid adds a color/object
+
+--> envs/build_vocab
+- 

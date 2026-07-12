@@ -10,4 +10,47 @@
 - so build it properly from the env itself so nothingbreaks later when MiniGrid adds a color/object
 
 --> envs/build_vocab
-- 
+- This gives us a stable configs/mission_vocab.json 
+— same idea as a tokenizer vocab file you'd version-control in any NLP pipeline
+- so training and inference always agree on token IDs
+
+--> envs/wrapper.py
+
+--> models/fusion_extractor.py
+
+--> training/03_train_ppo_instruction.py
+- training script for instruction-conditioned PPO
+- MultiInputPolicy replaces CnnPolicy because our observation is now a Dict (image + mission), not a single array. 
+- SB3 requires this policy type whenever you're using dict observations, regardless of what feature extractor you supply.
+- n_input_channels = observation_space["image"].shape[0] in the extractor assumes the image comes in as (C, H, W)
+- that's true after SB3's automatic VecTransposeImage wrapping (same as Phase 0), but only for the image inside a dict space with MultiInputPolicy; 
+- SB3 handles this transpose automatically for dict image sub-spaces too, so no extra wrapper needed here.
+- 200k timesteps instead of 100k — Fetch is a harder task than Empty (need to correctly interpret language + navigate to the right of several objects), so it'll likely need more samples to converge. 
+- If success rate looks poor after this, we bump timesteps further rather than assume something's broken.
+
+--> evaluation/02_eval_instruction
+- Confirmed something important from the source: max_steps for MiniGrid-Fetch-5x5-N2 is 125, but your ep_len_mean was only ~24–26. 
+- That means the agent isn't wandering and timing out — it's confidently grabbing some object almost every episode, just usually the wrong one. 
+- That's a very different diagnosis than "undertrained": the agent has learned how to grab objects quickly, but not which one the mission asks for. 
+- That's consistent with fusion not actually influencing action selection.
+
+--> evaluation/03-diagnose_fetch.py
+- Correct pickup: 10/50 (20%)
+- Wrong object picked: 5/50 (10%) — seeds 18, 26, 28, 29, 48
+- Picked NOTHING (ran out of steps without grabbing anything): 35/50 (70%)
+
+- That 70% "NOTHING" rate is the real story, and it changes the diagnosis from what I suspected. 
+- This isn't primarily "the agent ignores the mission and grabs the wrong thing" — it's "the agent frequently fails to successfully navigate to and grab any object at all" within 125 steps. 
+- That's a more basic skill (navigate + orient + trigger pickup at the right moment) that the policy hasn't reliably mastered yet.
+- Of the 15 episodes where it actually grabbed something, 10 were correct (66.7%) — meaningfully above the 50% chance baseline for a 2-object env, even on this small a sample. 
+- That's early evidence the text/fusion pathway is contributing signal, not being ignored — it just hasn't had enough training to become both reliable and accurate at the same time. 
+- Low explained_variance (0.017–0.043) supports this too: the value function hasn't learned to predict returns well yet, which is consistent with "undertrained on a harder task," not "architecturally broken."
+- So the fix is less about redesigning fusion and more about giving the model a fairer shot at learning the harder task.
+
+-- trying a curriculum first — train on MiniGrid-Fetch-5x5-N1 (only 1 object, no distractor) so the agent masters navigate-and-grab in isolation
+-- then fine-tune on N2 where instruction-following actually matters? 
+-- That tends to converge faster and more reliably than throwing a harder task at PPO from scratch, and it'll also give us a cleaner signal about whether fusion is working, since N1 removes the "which object" ambiguity entirely.
+
+--> training/04_train_ppo_n1.py
+- No N1 variant is pre-registered — only N2 and N3 ship as named IDs. 
+- But the underlying FetchEnv class supports numObjs=1 directly, we just need to instantiate it ourselves instead of going through gym.make

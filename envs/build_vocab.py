@@ -31,3 +31,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+##### RESULTS #####
+# Vocab size: 16
+# Max mission length (words): 6

@@ -54,3 +54,53 @@
 --> training/04_train_ppo_n1.py
 - No N1 variant is pre-registered — only N2 and N3 ship as named IDs. 
 - But the underlying FetchEnv class supports numObjs=1 directly, we just need to instantiate it ourselves instead of going through gym.make
+- results showed a very clean result
+- ep_rew_mean at 0.96–0.97 with ep_len_mean around 4–5 steps means it's basically walking straight to the object almost immediately, every episode. 
+- This confirms the navigate-and-grab skill is solid on its own.
+- we now fine-tun N2 from this
+
+--> training/05_finetune_ppo_N2
+
+--> evaluation/04_eval_decomposed.py
+-> 55.2% accuracy-given-pickup is barely above the 50% chance floor for N2
+- combined with the pickup rate jumping to 67% (curriculum clearly fixed the navigation problem), 
+- this is now much cleaner evidence: the instruction/mission branch likely isn't meaningfully influencing action selection. 
+- The vision+navigation skill transferred and improved as hoped; the language conditioning didn't come along for the ride.
+- Before redesigning the fusion architecture, testing whether changing only the mission, with the exact same image observation held fixed, actually changes the policy's action probabilities at all. 
+- If it doesn't, that confirms the text branch is effectively a dead signal path; 
+- if it does shift somewhat but weakly, that's a "needs more capacity/training" story instead.
+
+--> evaluation/05_probe_mission_sensitivity.py
+- If the action_probs rows are nearly identical across all 5 missions → the mission input is being effectively ignored by the policy, confirming a dead/weak text pathway. 
+- In that case, we redesign the fusion — most likely swap the simple concat+MLP for a FiLM-style fusion (using the text embedding to modulate the vision features via learned scale/shift, a well-established technique for instruction-conditioned RL/vision-language tasks) rather than just adding more training time.
+- If probs shift noticeably between missions → the signal is there but weak/noisy, and more training or a slightly larger text embedding dimension is the right fix, not an architecture change.
+
+- Results show that the action_probs barely move at all across five completely different missions (asking for a blue key vs. a red key vs. a yellow key),
+- and top_action=2 never changes. The mission input is essentially a dead signal. 
+- This isn't a training-time issue anymore; it's an architecture issue.
+- to further check, let's confirm the text embeddings themselves aren't collapsed to near-identical vectors 
+- (a common failure mode: if gradient signal to the embedding table is weak, all rows can end up similar, especially when the only training experience that ever needed to differentiate colors was the N2 fine-tune phase, while N1 never needed language at all and could've taught the network "the text branch is irrelevant noise").
+
+--> evaluation/06_probe_embeddings
+- results show that the embeddings are not collapsed. 
+- Each color has a distinct, well-separated vector (different signs, different magnitudes, norms all in a healthy 7.6–8.9 range). 
+- So the language signal genuinely exists and differentiates between colors; it's not a dead/undertrained embedding table.
+- This actually strengthens the FiLM diagnosis rather than changing it: the information is present, but the old concat+MLP fusion failed to make the policy use it
+- the network found it easier to just ignore a clearly-informative signal and rely on vision alone, since nothing forced it to route through language.
+- That's exactly the failure mode FiLM's structural gating is designed to prevent, so we retrain.
+
+- FiLM (Feature-wise Linear Modulation): the text embedding produces a scale and shift that directly multiplies/offsets the vision features, so language isn't just "one more input the MLP might use," it's an architectural gate on vision itself.
+
+--> update models/fusion_extractor.py
+- The (1 + gamma) trick matters: it means at initialization (before training moves gamma away from ~0), 
+- the modulation starts close to identity rather than zeroing out vision features randomly
+- this gives training a stable starting point instead of fighting through a bad init.
+
+--> run training/04_train_ppo_n1
+- retrain to get new model weights because we have now updated the fusion_extractor
+- This will overwrite models/ppo_curriculum_n1 with fresh weights using the new FiLM-based MultimodalFusionExtractor. 
+- Since N1 has no distractor object, this step doesn't really test whether FiLM helps with instruction-following (that's what N2 fine-tuning + the probe script will reveal)
+- this run is just re-establishing the navigate-and-grab skill on top of the new architecture.
+
+
+

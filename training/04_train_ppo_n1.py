@@ -60,3 +60,133 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+##### RESULTS 2: from FiLM fusion extractor #####
+# ------------------------------------------
+# | rollout/                |              |
+# |    ep_len_mean          | 3.86         |
+# |    ep_rew_mean          | 0.972        |
+# | time/                   |              |
+# |    fps                  | 963          |
+# |    iterations           | 291          |
+# |    time_elapsed         | 309          |
+# |    total_timesteps      | 297984       |
+# | train/                  |              |
+# |    approx_kl            | 0.0031526578 |
+# |    clip_fraction        | 0.00171      |
+# |    clip_range           | 0.2          |
+# |    entropy_loss         | -0.0122      |
+# |    explained_variance   | 0.671        |
+# |    learning_rate        | 0.0003       |
+# |    loss                 | 1.4e-05      |
+# |    n_updates            | 1160         |
+# |    policy_gradient_loss | -0.00026     |
+# |    value_loss           | 0.000127     |
+# ------------------------------------------
+# ------------------------------------------
+# | rollout/                |              |
+# |    ep_len_mean          | 4.08         |
+# |    ep_rew_mean          | 0.971        |
+# | time/                   |              |
+# |    fps                  | 963          |
+# |    iterations           | 292          |
+# |    time_elapsed         | 310          |
+# |    total_timesteps      | 299008       |
+# | train/                  |              |
+# |    approx_kl            | 0.0007598886 |
+# |    clip_fraction        | 0.00244      |
+# |    clip_range           | 0.2          |
+# |    entropy_loss         | -0.0176      |
+# |    explained_variance   | 0.698        |
+# |    learning_rate        | 0.0003       |
+# |    loss                 | -0.00328     |
+# |    n_updates            | 1164         |
+# |    policy_gradient_loss | -0.000183    |
+# |    value_loss           | 0.000123     |
+# ------------------------------------------
+# ----------------------------------------
+# | rollout/                |            |
+# |    ep_len_mean          | 3.66       |
+# |    ep_rew_mean          | 0.974      |
+# | time/                   |            |
+# |    fps                  | 963        |
+# |    iterations           | 293        |
+# |    time_elapsed         | 311        |
+# |    total_timesteps      | 300032     |
+# | train/                  |            |
+# |    approx_kl            | 0.01181892 |
+# |    clip_fraction        | 0.0127     |
+# |    clip_range           | 0.2        |
+# |    entropy_loss         | -0.0258    |
+# |    explained_variance   | 0.658      |
+# |    learning_rate        | 0.0003     |
+# |    loss                 | -0.00479   |
+# |    n_updates            | 1168       |
+# |    policy_gradient_loss | -0.00126   |
+# |    value_loss           | 0.000134   |
+# ----------------------------------------
+
+##### RESULTS 1: from NLP+cat fusion extractor #####
+# -----------------------------------------
+# | rollout/                |             |
+# |    ep_len_mean          | 3.93        |
+# |    ep_rew_mean          | 0.972       |
+# | time/                   |             |
+# |    fps                  | 617         |
+# |    iterations           | 291         |
+# |    time_elapsed         | 482         |
+# |    total_timesteps      | 297984      |
+# | train/                  |             |
+# |    approx_kl            | 0.012318168 |
+# |    clip_fraction        | 0.00659     |
+# |    clip_range           | 0.2         |
+# |    entropy_loss         | -0.0242     |
+# |    explained_variance   | 0.578       |
+# |    learning_rate        | 0.0003      |
+# |    loss                 | -0.00552    |
+# |    n_updates            | 1160        |
+# |    policy_gradient_loss | -0.00144    |
+# |    value_loss           | 0.000159    |
+# -----------------------------------------
+# -----------------------------------------
+# | rollout/                |             |
+# |    ep_len_mean          | 4.32        |
+# |    ep_rew_mean          | 0.969       |
+# | time/                   |             |
+# |    fps                  | 618         |
+# |    iterations           | 292         |
+# |    time_elapsed         | 483         |
+# |    total_timesteps      | 299008      |
+# | train/                  |             |
+# |    approx_kl            | 0.029981898 |
+# |    clip_fraction        | 0.0239      |
+# |    clip_range           | 0.2         |
+# |    entropy_loss         | -0.0298     |
+# |    explained_variance   | 0.562       |
+# |    learning_rate        | 0.0003      |
+# |    loss                 | 0.00249     |
+# |    n_updates            | 1164        |
+# |    policy_gradient_loss | -0.00313    |
+# |    value_loss           | 0.000256    |
+# -----------------------------------------
+# ----------------------------------------
+# | rollout/                |            |
+# |    ep_len_mean          | 5.42       |
+# |    ep_rew_mean          | 0.961      |
+# | time/                   |            |
+# |    fps                  | 619        |
+# |    iterations           | 293        |
+# |    time_elapsed         | 484        |
+# |    total_timesteps      | 300032     |
+# | train/                  |            |
+# |    approx_kl            | 0.04152449 |
+# |    clip_fraction        | 0.0474     |
+# |    clip_range           | 0.2        |
+# |    entropy_loss         | -0.0562    |
+# |    explained_variance   | 0.0545     |
+# |    learning_rate        | 0.0003     |
+# |    loss                 | 0.0476     |
+# |    n_updates            | 1168       |
+# |    policy_gradient_loss | 0.0101     |
+# |    value_loss           | 0.00118    |
+# ----------------------------------------

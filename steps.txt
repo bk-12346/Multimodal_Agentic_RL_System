@@ -102,5 +102,78 @@
 - Since N1 has no distractor object, this step doesn't really test whether FiLM helps with instruction-following (that's what N2 fine-tuning + the probe script will reveal)
 - this run is just re-establishing the navigate-and-grab skill on top of the new architecture.
 
+--> run training/05_finetune_ppo_n2.py
 
+--> run 04_eval_decomposed.py
+
+--> run 05_probe_mission_sensitivity.py
+- This is genuinely important context, flag something before we interpret it: overall success jumped from 37% → 66%, 
+- and accuracy-given-pickup went from 55.2% → 66.7% — well above the 50% chance floor now. 
+- That's real, meaningful evidence that FiLM conditioning is working behaviorally. 
+- But the probe still shows flat action_probs across missions. 
+- These two results seem contradictory - the probe itself has a design flaw, not the model.
+- Here's the issue: the probe used the image from reset(seed=0) — a single fixed snapshot, likely the very first frame of the episode. 
+- MiniGrid's observation is only a 7×7 partial view centered on the agent. 
+- If neither target object is actually visible in that particular frame yet (agent hasn't turned toward or approached them), 
+- then no mission text should change the optimal action at that instant
+- the agent correctly has nothing to condition on yet, since it can't see anything to choose between. 
+- A flat response there is actually the correct policy behavior, not evidence of a dead pathway.
+
+--> evaluation/07_probe_mission_sensitivity_v2.py
+- fix the probe to grab a frame where an object is actually visible
+- reults do not show anything wrong
+- MiniGrid's action space is [left, right, forward, pickup, drop, toggle, done]. 
+- Action 2 = forward. If the agent is mid-approach toward some object it's spotted, "move forward" is the sensible action regardless of which color/type it eventually turns out to be
+- the agent hasn't reached a discrimination point yet, it's still closing distance. 
+- The actual moment language should matter is much narrower: the instant the agent is directly adjacent to and facing a specific object, 
+- deciding whether to invoke pickup (action 3) on this object or turn away to keep searching. 
+- Our probe grabbed a random "object visible somewhere in the 7×7 view" frame, which is very likely still an approach frame, not that critical decision frame.
+- The more trustworthy evidence is actually the aggregate result we already have: 66.7% accuracy-given-pickup across 99 real rollouts, up from 55.2%. With n=99, 
+- that's a jump from barely-above-chance to a statistically meaningful signal (roughly 3+ standard deviations above the 50% floor)
+- that's real evidence FiLM is helping the model discriminate, just not visible in this one hand-picked frame.
+- so we will not be investigating this further and instead moving on to PHASE 2
+
+--> evaluation/09_log_action_trace.py
+- one last thing we will be checking is whether the agent takes any action other than forward
+- just going to log the action trace for this
+- action trace confirms that it does perform actions other than just 'forward'
+- no further action needed
+- moving on to PHASE 2
+
+--->> Create an Amazon S3 bucket to hold all the models
+- creating it now so that everything is tracked from the beginning
+- created an account + IAM user
+- added credentials
+- created S3 bucket - aws s3 mb s3://bk-multiagent-rl-2026
+
+--> create training/utils_s3.py - upload utility
+
+--> create training/finalize_run.py
+- Rather than modify every script, creating one small "finalize run" script that we call after any train+eval pair completes
+- cleaner than scattering S3 calls everywhere, and keeps train/eval scripts focused on just training/eval.
+
+- uv run training/finalize_run.py --model_path models/ppo_curriculum_n2_finetuned --run_name ppo_curriculum_n2_finetuned --success_rate 0.667 --mean_reward 0.68 --notes "FiLM fusion, curriculum N1->N2, accuracy-given-pickup 66.7% vs 55.2% concat baseline"
+- aws s3 ls s3://bk-multiagent-rl-2026/models/ --recursive
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+PHASE 2: GENERALIZATION & ROBUSTNESS
+-------------------------------------------------------------------------------------------------------------------------------------------------
+Per the checklist, this phase needs:
+
+-- Multiple training environments (Env A/B/C — varied layouts/obstacle placement/goal positions)
+-- Unseen test environments (Env D/E — genuinely new configurations)
+-- Metrics: success rate drop, reward difference, episode length change between train and test
+-- Robustness stress tests: observation noise, layout randomization
+-- Failure case analysis + trajectory visualization
+
+***** GENERALIZATIN SPLIT *****
+---> Stage A — held-out vocabulary 
+- tests whether FiLM actually learned a general color/object concept, or just memorized specific color-object pairings it saw during training:
+--> Train: exclude one color entirely (e.g., never show "grey" during training) and exclude one specific color+object combo (e.g., never show "purple key" even though purple and key individually appear elsewhere)
+--> Test: missions specifically asking for grey objects, and specifically for purple keys
+
+---> Stage B — structural generalization 
+- tests whether the CNN/navigation policy generalizes beyond the exact grid size/distractor count it trained on
+--> Train: 5x5 grid, 2 objects (what we've been using)
+--> Test: 6x6 and 8x8 grids, 3 objects (using the other registered variants — MiniGrid-Fetch-6x6-N2 and MiniGrid-Fetch-8x8-N3 — so we don't need custom env instantiation)
 

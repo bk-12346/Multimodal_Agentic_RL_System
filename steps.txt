@@ -177,3 +177,77 @@ Per the checklist, this phase needs:
 --> Train: 5x5 grid, 2 objects (what we've been using)
 --> Test: 6x6 and 8x8 grids, 3 objects (using the other registered variants — MiniGrid-Fetch-6x6-N2 and MiniGrid-Fetch-8x8-N3 — so we don't need custom env instantiation)
 
+*** STAGE A ***
+--> envs/build_vocab_heldout.py
+- uses the same vocab
+-  just holds back color 'grey' + pairing 'purple+key'
+
+--> envs/heldout_filter_wrapper.py
+- we need a training wrapper that rejects/resamples episodes whose mission violates the held-out rule, so training never sees them.
+
+--> training/06_train_heldout_split.py
+- 0.82 ep_rew_mean is very good
+
+--> envs/heldout_force_wrapper.py
+- Opposite of HeldoutMissionFilterWrapper: re-samples until the mission DOES match one of the held-out conditions (never seen in training).
+- Used only at eval time, to measure generalization specifically.
+
+--> evaluation/09_eval_generalization.py
+- Side-by-side eval: seen vs. held-out
+
+----> Interesting result — Two things stand out:
+- 1. 89.6% accuracy on seen vocab — up from 66.7% in the earlier full-vocab run. 
+- Makes sense: fewer combos to learn, easier training distribution.
+- 20.5% held-out accuracy is below the 50% chance floor, and pickup rate collapsed to 44% (from 96%)
+- this is more than "picks the wrong object." 
+- Something about unfamiliar mission text appears to actively disrupt navigation itself, not just object discrimination.
+
+- 2. points at a real mechanism: grey was never a target during training, 
+- so its word embedding never received gradient through the FiLM generator
+- but the mission vocabulary was built before the held-out split, so the token exists, just under-trained for that role. 
+- When FiLM feeds an under-trained embedding into film_generator, it produces near-random (gamma, beta) values that then corrupt the vision features themselves
+- this is a documented failure mode of FiLM-style conditioning: modulation parameters from out-of-distribution inputs don't degrade gracefully, they can actively harm the pathway they're supposed to enhance. 
+- That would explain why pickup rate (a purely visual/navigation skill) also dropped, even though navigation itself was never touched by the held-out split.
+
+- Before drawing conclusions, we should split this by which kind of held-out case is driving the collapse, 
+- since grey (a color that's never once the target) and purple key (a combo of two individually-trained tokens, just never paired) are testing fundamentally different things
+- one is generalizing to a truly novel concept, the other is recombining known parts. 
+- That distinction matters a lot for how we'd frame this finding.
+
+--> create evaluation/10_eval_generalization_split.py
+- Novel color (grey): 0% accuracy, 0% overall success. 
+- Complete failure to generalize to a color the network never once had to route through as a target.
+- Novel combo (purple key): 68.9% accuracy-given-pickup — essentially on par with the original full-vocab result (66.7%), 
+- even though this exact pairing was never shown during training.
+
+----> This is a genuinely strong, well-isolated finding: the FiLM-conditioned policy generalizes compositionally when recombining known attributes, but cannot generalize to an attribute it never saw in the target role, even though that attribute's word embedding exists and appears elsewhere in the vocabulary. 
+----> That's not just "it failed at grey" — it's evidence about how the failure happens: novel combos only require FiLM to recombine two already-calibrated modulation directions, while a truly novel color requires the film_generator to produce sensible (gamma, beta) from an embedding region of space it never received target-relevant gradient through 
+- and instead of degrading gracefully, it produces modulation that actively corrupts navigation (pickup rate dropping to 43%, well below even the wrong-object cases).
+
+--> log to S3 as a finding
+- uv run training/finalize_run.py --model_path models/ppo_heldout_split --run_name ppo_heldout_split --success_rate 0.86 --mean_reward 0.82 --notes "Held-out vocab split. Seen-vocab accuracy 89.6%. Novel-combo (purple+key, both parts trained) accuracy 68.9% - compositional generalization works. Novel-color (grey, never a target) accuracy 0% - fails completely, pickup rate also collapses to 43%, suggesting FiLM params from undertrained embeddings actively corrupt vision pathway rather than degrading gracefully."
+
+----> Deciding to keep FiLM architecture for now:
+- Don't think the 0% grey result is really an indictment of FiLM as an architecture. 
+- Consider what we're asking: the color grey never once appeared as a training target 
+- nothing in the entire training signal ever taught any part of the network "grey" should drive target-selection behavior. 
+- That's true zero-shot generalization to an unsupervised class, and I'd expect any fusion mechanism (concat, FiLM, attention, whatever) to struggle here, 
+- because the failure is upstream of the fusion step
+- it's that grey's embedding never received gradient in the role that matters. 
+- Meanwhile, on the test that is fair to attribute to the fusion mechanism — recombining two individually-trained concepts it's seen before (novel combo, purple key) — FiLM held up at 68.9%, 
+- nearly matching its full-vocab performance. 
+- And it clearly outperformed concat+MLP on the original diagnostic (66.7% vs. 55.2%, same conditions). 
+- That's real evidence in FiLM's favor, not against it.
+
+** Failure Visualization **
+--> add a rendering dependency
+- uv add imageio pillow
+
+--> evaluation/11_visualize_failures.py
+- This saves 5 GIFs to evaluation/failure_renders/ — each filename tells us the target and what was actually picked
+
+----> findings looged in evaluation/phase2_findings.mid
+
+*** Fixing the Failure by swapping the from-scratch nn.Embedding for pre-trained text embeddings like MiniLM ***
+
+

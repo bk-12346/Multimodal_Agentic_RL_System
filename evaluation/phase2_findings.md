@@ -87,3 +87,32 @@ reward, or (c) architectural constraints that prevent FiLM parameters from
 diverging far from identity for out-of-distribution text inputs. These are
 noted as directions for future work rather than pursued further here, given
 project scope.
+
+## Stage B: Structural Generalization (Grid Size / Distractor Count)
+
+Tested both trained models (unchanged, no retraining) on MiniGrid-Fetch
+variants with larger grids and more distractors than seen in training.
+
+| Metric | Scratch-embed FiLM (full vocab) | MiniLM FiLM (held-out vocab) |
+|---|---|---|
+| 5x5-N2 (train dist) pickup / acc\|pickup | 99% / 66.7% | 85% / 77.6% |
+| 6x6-N2 pickup / acc\|pickup | 84% / 67.9% | 59% / 78.0% |
+| 8x8-N3 pickup / acc\|pickup | 59% / 52.5% | 38% / 34.2% |
+
+**Note on comparability**: these two models were trained on different
+vocabulary conditions (full vocab vs. held-out split), so differences here
+are not attributable to embedding type alone. A controlled comparison would
+require retraining MiniLM on the identical full-vocabulary distribution.
+
+### Findings
+- Object discrimination (accuracy given pickup) generalizes reasonably well
+  to larger grids for both models, staying meaningfully above chance even
+  at 8x8/N3 — consistent with MiniGrid's fixed 7x7 partial-observation
+  window making the vision encoder largely size-invariant.
+- Navigation/exploration (pickup rate) degrades substantially with grid
+  size for both models, more steeply than discrimination — larger grids
+  are a harder search problem independent of language grounding.
+- MiniLM showed stronger discrimination at moderate scale-up (6x6) but its
+  advantage did not hold at the most extreme test condition (8x8/N3),
+  where it fell to near-chance while the scratch-embedding model retained
+  a meaningful margin above chance.

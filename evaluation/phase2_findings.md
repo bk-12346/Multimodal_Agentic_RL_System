@@ -36,3 +36,54 @@ loop.
 - Using a pretrained text embedding; specifically sentence-transformers with the all-MiniLM-L6-v2 model
 - It produces a single 384-dim embedding for the whole mission sentence, computed once per episode (since mission doesn't change mid-episode), not per-word. 
 - This also simplifies things: no more vocab file, no more token IDs — colors and objects inherit real semantic structure from pretraining instead of starting from scratch.
+
+## Follow-up: Pretrained Text Embeddings (MiniLM)
+
+### Motivation
+The novel-color failure above showed a specific mechanistic signature (policy
+locks into a stable oscillation loop near the target), consistent with a
+from-scratch nn.Embedding producing ungrounded, out-of-distribution FiLM
+modulation parameters for a color never seen in the target role. Hypothesis:
+a pretrained sentence encoder (MiniLM, 384-dim) would give "grey" semantic
+proximity to other colors via pretraining, potentially producing more
+graceful degradation.
+
+### Results across training duration
+
+| Checkpoint | Seen accuracy | Novel-combo accuracy | Novel-color (grey) accuracy | Grey pickup rate |
+|---|---|---|---|---|
+| ~400k steps | 70.7% | 51.4% | 45.8% | 83% |
+| ~700k steps | 80.8%* | — | 0.0%* | — |
+| ~900k-1.1M steps | 92-93% | 92.2% | 0.0% | 28% |
+
+*From the checkpoint-search run (30-episode evals, noisier than the 100-episode
+standalone evals used for the 400k row).
+
+### Key findings
+1. **The catastrophic failure mode (spinning lockup) was fixable**: at the
+   400k checkpoint, pickup rate on novel-color episodes rose from 43%→83%
+   and accuracy from 0%→45.8%, confirming the hypothesis that pretrained
+   embeddings can prevent the corrupted-modulation lockup behavior.
+2. **This capability was unstable, not a stable improvement**: continued
+   training pushed seen/combo accuracy above even the original from-scratch
+   baseline (93% vs 89.6% seen, 92% vs 68.9% combo) but novel-color accuracy
+   collapsed back to 0% by 700k steps and stayed there.
+3. **Run-to-run variance was substantial**: a second training run evaluated
+   at a similar step count to the first did not reproduce the 45.8% result,
+   suggesting the phenomenon is sensitive to training stochasticity, not a
+   deterministic function of step count alone.
+
+### Interpretation
+Pretrained text embeddings are not a complete or reliable fix for zero-shot
+generalization to attributes never observed in a supervised (target) role.
+They can, under some training conditions, prevent the worst failure mode
+(policy lockup) and produce partial generalization, but standard PPO
+fine-tuning has no mechanism to preserve this property once optimization
+pressure favors specializing to the training distribution. A more reliable
+fix would likely require: (a) explicit regularization or an auxiliary loss
+that rewards smooth behavior across embedding space, (b) multi-seed training
+with checkpoint selection based on held-out accuracy rather than training
+reward, or (c) architectural constraints that prevent FiLM parameters from
+diverging far from identity for out-of-distribution text inputs. These are
+noted as directions for future work rather than pursued further here, given
+project scope.

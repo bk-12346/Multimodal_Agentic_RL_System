@@ -1,3 +1,5 @@
+uv run tensorboard --logdir logs/ppo_baseline
+
 --> training/00_env_check
 --> training/01__train_ppo_baseline
 --> evaluation/01_eval_baseline.py
@@ -246,8 +248,83 @@ Per the checklist, this phase needs:
 --> evaluation/11_visualize_failures.py
 - This saves 5 GIFs to evaluation/failure_renders/ — each filename tells us the target and what was actually picked
 
-----> findings looged in evaluation/phase2_findings.mid
+----> findings logged in evaluation/phase2_findings.md
+--> updated S3 bucket
+- aws s3 cp evaluation/phase2_findings.md s3://bk-multiagent-rl-2026/logs/ppo_heldout_split/phase2_findings.md
+
 
 *** Fixing the Failure by swapping the from-scratch nn.Embedding for pre-trained text embeddings like MiniLM ***
+
+- use sentence-transformers with the all-MiniLM-L6-v2 model
+- it produces a single 384-dim embedding for the whole mission sentence, computed once per episode (since mission doesn't change mid-episode), not per-word. 
+- This also simplifies things: no more vocab file, no more token IDs — colors and objects inherit real semantic structure from pretraining instead of starting from scratch.
+
+--> uv add sentence-transformers
+
+--> create envs/pretrained_text_wrapper.py
+- create embedding wrapper
+
+--> create models/fusion_extractor_pretrained.py
+- new fusion extractor with the pretrained embedding
+
+--> training/07_train_ppo_n1_pretrained.py
+- retrain N1 with the new pipeline
+- Since the observation space and feature extractor both changed shape, we can't warm-start from the old checkpoint — need a fresh N1 run first.
+- N1 converges just as cleanly as before (0.97 reward, ~4-step episodes) — confirms the pretrained-embedding pipeline didn't disrupt basic navigation.
+
+--> training/08_finetune_ppo_n2_pretrained.py
+- held-out N2 fine-tune with the pretrained pipeline
+
+--> evaluation/12_eval_generalization_pretrained.py
+- eval for pretrained pipeline
+- results show that the catastrophic failure mode is gone
+- grey accuracy went 0% → 45.8%, and — this is the more important number — pickup rate went 43% → 83%. 
+- That second number confirms the spinning-lockup bug specifically is fixed: the agent is no longer getting trapped in a degenerate loop near grey objects. 
+- It's now behaving essentially like it does on any other split — approach, decide, act. 
+- That validates the mechanism we diagnosed: pretraining gave the color embeddings real structure, so an out-of-distribution color no longer produces garbage (gamma, beta) that traps the policy.
+- But there's a real cost: accuracy dropped across the board — seen vocab went 89.6% → 70.7%, novel combo went 68.9% → 51.4% (now barely above chance). 
+- The three conditions have become much more uniform (roughly 46–71% across the board) rather than the old pattern of "great on seen/combo, catastrophic on grey." 
+- We traded a severe, localized failure for a smaller, more evenly-distributed one.
+- This is mostly explainable by training budget, not a fundamental flaw: the training reward curve (0.56–0.63) and higher remaining entropy (entropy_loss -0.63 vs. -0.17 in the old run) both suggest this run simply hadn't converged as fully 
+- a frozen 384-dim MiniLM embedding gives the network a much richer, higher-dimensional space to learn to extract structure from than a small trainable 64-dim table, 
+- and the same 400k fine-tune steps may just not be enough to fully exploit it yet.
+
+----> DECISION: EXTEND THE FINE-TUNING 
+
+--> training/09_extend_finetune_pretrained.py
+
+--> update MODEL_PATH in evaluation/12_eval_generalization_pretrained.py to "models/ppo_pretrained_heldout_n2_extended" and rerun it.
+
+----> Interesting Results:
+- With more training, seen/combo accuracy jumped even higher than the original from-scratch-embedding run — 93.3% seen (vs. 89.6% before), 92.2% novel combo (vs. 68.9% before). 
+- Genuinely better than anything yet.
+- But grey collapsed straight back to 0%, and pickup rate crashed to 28%
+- essentially reverting to the original catastrophic failure (likely the same spinning-lockup behavior, though we'd need to re-render to confirm).
+- This is a clean, textbook demonstration of a real and important phenomenon: as training progresses, the policy sharpens its decision boundaries around the colors it actually gets rewarded for discriminating,
+- and that sharpening actively destroys whatever graceful, "fuzzy" generalization the undertrained pretrained-embedding model had. 
+- Early in training, the FiLM generator hadn't yet specialized hard enough to only work for trained colors 
+- it was still operating in a more generic regime, which happened to let grey partially through (45.8%). 
+- More training optimized harder for the training distribution and, in doing so, closed off the very generalization we were trying to create. 
+- The pretrained embedding gave grey semantic proximity to other colors, but nothing in the objective ever rewarded the network for preserving that proximity's usefulness 
+- so gradient descent was free to carve it away once it stopped mattering for the training loss.
+
+----> That's a legitimately strong, citable finding: pretrained embeddings alone don't guarantee preserved generalization under continued optimization 
+- there's a training-duration-dependent trade-off between in-distribution sharpness and out-of-distribution robustness,
+- and nothing in standard PPO fine-tuning protects the latter.
+- The principled next step is checkpoint selection using held-out accuracy as the selection criterion — not just training reward. 
+- Practically: periodically evaluate grey accuracy during training (every N steps) and keep the checkpoint where it peaks, rather than just the final one. 
+- This is standard good ML practice (early stopping on a validation signal that's orthogonal to the training objective) and would let us report the actual best trade-off point rather than either endpoint we've seen so far.
+
+--> training/callbacks.py
+- custom callback that tracks held-out accuracy during training
+
+--> training/10_train_checkpoint_selection.py
+- training script that maps the wholre trajectory
+
+--> log findings to S3
+aws s3 cp evaluation/phase2_findings.md s3://bk-multiagent-rl-2026/logs/phase2_findings.md
+
+--> 
+
 
 

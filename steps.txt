@@ -324,7 +324,53 @@ Per the checklist, this phase needs:
 --> log findings to S3
 aws s3 cp evaluation/phase2_findings.md s3://bk-multiagent-rl-2026/logs/phase2_findings.md
 
---> 
+*** STAGE B ***
+--> evaluation/13_eval_structural_generalization.py
+- structural generalization eval 
+- bigger grids to test the agent
 
+- Results show that:
+1. Accuracy-given-pickup barely moves: 66.7% → 67.9% → 52.5%. 
+- Even in the hardest setting (8×8, 3 distractors, where random chance is ~33% for 3 objects), 52.5% is meaningfully above chance. 
+- That's a real positive finding: the language-grounding/discrimination capability generalizes reasonably well to structural changes 
+- makes sense, since MiniGrid's 7×7 partial observation window doesn't change with grid size, so whatever the CNN learned about "recognizing this color/object" from local views should transfer regardless of overall grid dimensions.
 
+2. Pickup rate drops much more steeply: 99% → 84% → 59%. 
+- This is the navigation/search side struggling, not the instruction-following side 
+- larger grids mean more area to explore before an object even enters the agent's 7×7 view, which is a harder exploration problem, not a harder discrimination problem.
 
+--> Run the identical test on the MiniLM model using evaluations/13
+- MODEL_PATH = "models/ppo_pretrained_checkpoint_search_final"  # MiniLM, most-trained checkpoint (93% seen accuracy)
+
+-----> log to S3
+aws s3 cp evaluation/phase2_findings.md s3://bk-multiagent-rl-2026/logs/phase2_findings.md
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+PHASE 3: AGENTIC/RELIABLE LLM LAYER
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+--> planner/rule_based_planner.py
+- starting with a rule-based planner so that we have a good baseline for comparison with LLM later
+
+--> planner/executor.py
+- Executor with failure detection + retry/fallback
+
+--> training/11_run_plan.py
+- runner script for rule-based agent
+- great results!
+- it breaks the instruction into suitable sub-goals 
+- achieves 2/3 subgoals so pretty good for first trying
+- log to S3
+-- uv run training/finalize_run.py --model_path models/ppo_curriculum_n2_finetuned --run_name planner_rule_based_v1 --success_rate 0.667 --mean_reward 0.68 --notes "Rule-based multi-step planner: parses 'X then Y then Z' instructions into subgoals, executes sequentially with retry (max 2 retries) and failure classification (SUCCESS/WRONG_OBJECT/TIMEOUT). Test run: 2/3 subgoals resolved."
+
+--> add confidence scoring without using an LLM - update executor.py
+
+--> rerun training/11
+- the failure case has 0.90 mean confidence — just as high as the two successes. 
+- The policy isn't uncertain when it grabs the wrong object; it's confidently wrong. 
+- This means the low-confidence-abort mechanism, as designed, won't catch this failure mode at all
+- it's built to catch hesitation/confusion, but this agent doesn't hesitate when it's wrong, it commits fully to the wrong answer.
+
+----> documenting in evaluation/phase3_findings.md
+--> logging to S3
+- uv run training/finalize_run.py --model_path models/ppo_curriculum_n2_finetuned --run_name planner_confidence_v1 --success_rate 0.667 --mean_reward 0.68 --notes "Added confidence scoring. Found confidence does NOT distinguish success from wrong-object failures (0.90 conf on failure vs 0.92-0.96 on success) - policy is confidently wrong, not uncertain. Confidence-based abort only useful for genuine confusion, not mission-grounding failures."

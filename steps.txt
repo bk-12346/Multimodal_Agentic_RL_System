@@ -374,3 +374,43 @@ PHASE 3: AGENTIC/RELIABLE LLM LAYER
 ----> documenting in evaluation/phase3_findings.md
 --> logging to S3
 - uv run training/finalize_run.py --model_path models/ppo_curriculum_n2_finetuned --run_name planner_confidence_v1 --success_rate 0.667 --mean_reward 0.68 --notes "Added confidence scoring. Found confidence does NOT distinguish success from wrong-object failures (0.90 conf on failure vs 0.92-0.96 on success) - policy is confidently wrong, not uncertain. Confidence-based abort only useful for genuine confusion, not mission-grounding failures."
+
+***** SETTING UP AMAZON BEDROCK *****
+- select the model from the bedrock console
+- create a new long-term API key
+
+--> Set up the Anthropic SDK/OpenAI SDK
+- uv add anthropic/openai
+
+--> Store API key safely as an env variable
+- $env:BEDROCK_API_KEY = "your-long-term-key-here"
+- setx BEDROCK_API_KEY "your-long-term-key-here"    #to persist across sessions
+
+--> training/12_test_bedrock.py
+- small test to see if its wired in and working
+
+--> planner/bedrock_client.py
+- Bedrock client wrapper
+
+--> planner/llm_planner.py
+- LLM-based instruction parser 
+
+--> training/13_test_llm_planner.py
+- quick test for bedrock client and llm_planner to make sure they work before wiring into executor
+- checks two things
+1. does the LLM correctly parse a more naturally-phrased instruction than the regex could handle, 
+2. and does it correctly flag a mismatch vs. a match.
+
+*** NEXT STEPS ***
+1. replacing the regex parser in training/11_run_plan.py with parse_instruction_llm, 
+2. adding the verification call into SubgoalExecutor right after each attempt, so we get a real before/after comparison against the rule-based baseline
+
+--> run training/11_run_plan.py
+- results show that every single LLM verification agrees with our ground-truth ruling across all 5 attempts 
+- correctly flagging both matches and every mismatch, with sensible reasoning attached each time
+
+--> log to S3
+- uv run training/finalize_run.py --model_path models/ppo_curriculum_n2_finetuned --run_name planner_llm_bedrock_v1 --success_rate 0.667 --mean_reward 0.68 --notes "LLM planner via Bedrock Mantle (moonshotai.kimi-k2.5): flexible instruction parsing + post-hoc outcome verification. Verifier agreed with ground truth on 5/5 test attempts. Verification specifically targets the Phase 3 finding that RL policy confidence cannot distinguish correct from incorrect pickups (both ~0.90+)."
+
+
+

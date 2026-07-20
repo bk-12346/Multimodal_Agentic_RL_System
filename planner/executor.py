@@ -10,6 +10,8 @@ from stable_baselines3 import PPO
 
 from envs.wrapper import MissionTokenizerWrapper
 
+from planner.llm_planner import verify_outcome_llm
+
 VOCAB_PATH = "configs/mission_vocab.json"
 ENV_ID = "MiniGrid-Fetch-5x5-N2-v0"
 MAX_STEPS_PER_SUBGOAL = 100
@@ -84,6 +86,7 @@ class SubgoalExecutor:
         env.close()
 
         mean_conf = float(np.mean(confidences)) if confidences else 0.0
+        picked_description = f"{carrying.color} {carrying.type}" if carrying else "nothing"
 
         if aborted:
             outcome = "ABORTED_LOW_CONFIDENCE"
@@ -94,15 +97,31 @@ class SubgoalExecutor:
         else:
             outcome = "TIMEOUT"
 
-        return outcome, step_count, mean_conf
+        return outcome, step_count, mean_conf, picked_description
 
     def execute_subgoal(self, subgoal: dict, base_seed: int) -> dict:
         color, obj_type = subgoal["color"], subgoal["type"]
         attempts = []
 
         for attempt in range(1, MAX_RETRIES_PER_SUBGOAL + 2):
-            outcome, steps, mean_conf = self._run_once(color, obj_type, seed=base_seed + attempt * 7919)
-            attempts.append({"attempt": attempt, "outcome": outcome, "steps": steps, "mean_confidence": round(mean_conf, 3)})
+            outcome, steps, mean_conf, picked_description = self._run_once(
+                color, obj_type, seed=base_seed + attempt * 7919
+            )
+
+            # LLM verification -- independent check, doesn't trust the RL
+            # policy's own success/failure classification, since Phase 3
+            # showed the policy's confidence can't tell these apart itself.
+            verification = verify_outcome_llm(subgoal["mission"], picked_description)
+
+            attempts.append({
+                "attempt": attempt,
+                "outcome": outcome,
+                "steps": steps,
+                "mean_confidence": round(mean_conf, 3),
+                "picked": picked_description,
+                "llm_verified_match": verification["matches"],
+                "llm_reason": verification["reason"],
+            })
             if outcome == "SUCCESS":
                 break
 
@@ -113,6 +132,40 @@ class SubgoalExecutor:
             "final_outcome": final_outcome,
             "resolved": final_outcome == "SUCCESS",
         }
+
+    #     carrying = env.unwrapped.carrying
+    #     env.close()
+
+    #     mean_conf = float(np.mean(confidences)) if confidences else 0.0
+
+    #     if aborted:
+    #         outcome = "ABORTED_LOW_CONFIDENCE"
+    #     elif carrying and (carrying.color, carrying.type) == (color, obj_type):
+    #         outcome = "SUCCESS"
+    #     elif carrying:
+    #         outcome = "WRONG_OBJECT"
+    #     else:
+    #         outcome = "TIMEOUT"
+
+    #     return outcome, step_count, mean_conf
+
+    # def execute_subgoal(self, subgoal: dict, base_seed: int) -> dict:
+    #     color, obj_type = subgoal["color"], subgoal["type"]
+    #     attempts = []
+
+    #     for attempt in range(1, MAX_RETRIES_PER_SUBGOAL + 2):
+    #         outcome, steps, mean_conf = self._run_once(color, obj_type, seed=base_seed + attempt * 7919)
+    #         attempts.append({"attempt": attempt, "outcome": outcome, "steps": steps, "mean_confidence": round(mean_conf, 3)})
+    #         if outcome == "SUCCESS":
+    #             break
+
+    #     final_outcome = attempts[-1]["outcome"]
+    #     return {
+    #         "subgoal": subgoal,
+    #         "attempts": attempts,
+    #         "final_outcome": final_outcome,
+    #         "resolved": final_outcome == "SUCCESS",
+    #     }
 
 
 def execute_plan(subgoals: list[dict], model_path: str, base_seed: int = 0) -> list[dict]:

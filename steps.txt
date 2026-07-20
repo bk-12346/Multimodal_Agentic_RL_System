@@ -412,5 +412,14 @@ PHASE 3: AGENTIC/RELIABLE LLM LAYER
 --> log to S3
 - uv run training/finalize_run.py --model_path models/ppo_curriculum_n2_finetuned --run_name planner_llm_bedrock_v1 --success_rate 0.667 --mean_reward 0.68 --notes "LLM planner via Bedrock Mantle (moonshotai.kimi-k2.5): flexible instruction parsing + post-hoc outcome verification. Verifier agreed with ground truth on 5/5 test attempts. Verification specifically targets the Phase 3 finding that RL policy confidence cannot distinguish correct from incorrect pickups (both ~0.90+)."
 
+-------------------------------------------------------------------------------------------------
+***** PHASE 4: DEPLOYMENT *****
+-------------------------------------------------------------------------------------------------
 
+1. Create a quick FastAPI service
+
+--> api/main.py
+- uv add fastapi uvicorn
+- local run: uv run uvicorn api.main:app --reload --port 8000
+- test at: http://localhost:8000/docs
 

@@ -440,6 +440,15 @@ PHASE 3: AGENTIC/RELIABLE LLM LAYER
 --> for testing
 - http://localhost:8000/docs
 
+----------------------------------------------------------------------------------------------------
+***** AWS ECR - FOR DEPLOYMENT *****
+----------------------------------------------------------------------------------------------------
+
+1. Give the correct permissions to IAM
+-> IAM > users > user > Add Permissions > AmazonEC2ContainerRegistryFullAccess + AmazonEC2FullAccess
+
+1. Create an ECR repository
+- aws ecr create-repository --repository-name multiagent-rl-api --region us-east-1
 
 
 

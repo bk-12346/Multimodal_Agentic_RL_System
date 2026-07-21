@@ -423,3 +423,23 @@ PHASE 3: AGENTIC/RELIABLE LLM LAYER
 - local run: uv run uvicorn api.main:app --reload --port 8000
 - test at: http://localhost:8000/docs
 
+2. docker
+--> Update the model loading to pull from S3
+- update the api/main.py file
+
+--> dockerfile in project root 
+
+--> .dockerignore in project root 
+
+--> build and run locally first
+- docker build -t multiagent-rl-api .
+
+--> for the container to reach S3 we need AWS credentials
+- docker run -p 8000:8000 -e AWS_ACCESS_KEY_ID=$env:AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY=$env:AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION=us-east-1 multiagent-rl-api
+
+--> for testing
+- http://localhost:8000/docs
+
+
+
+

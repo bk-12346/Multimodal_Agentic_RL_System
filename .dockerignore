@@ -1,0 +1,7 @@
+.venv/
+models/*.zip
+logs/
+evaluation/failure_renders/
+.git/
+__pycache__/
+*.pyc

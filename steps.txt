@@ -450,5 +450,52 @@ PHASE 3: AGENTIC/RELIABLE LLM LAYER
 1. Create an ECR repository
 - aws ecr create-repository --repository-name multiagent-rl-api --region us-east-1
 
+2. Authenticate Docker to ECR
+- aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 555984984896.dkr.ecr.us-east-1.amazonaws.com
+- should see Login Succeeded
 
+3. Tag and push the existing image
+- docker tag multiagent-rl-api:latest 555984984896.dkr.ecr.us-east-1.amazonaws.com/multiagent-rl-api:latest
+- docker push 555984984896.dkr.ecr.us-east-1.amazonaws.com/multiagent-rl-api:latest
+
+-----------------------------------------------------------------------------------------------
+***** EC2 Deployment *****
+-----------------------------------------------------------------------------------------------
+
+1. Create an IAM role for the instance
+- Go to IAM > Roles > Create role:
+- Trusted entity type: AWS service
+- Use case: EC2
+- Attach policies: AmazonEC2ContainerRegistryReadOnly and AmazonS3ReadOnlyAccess
+- Name it: ec2-multiagent-rl-role
+
+2. Launch the instance
+-> Go to EC2 > Launch Instance:
+- Name: multiagent-rl-api-server
+- AMI: Amazon Linux 2023 (has good Docker support, simple to work with)
+- Instance type: t3.small
+- Key pair: create a new one if you don't have one, download the .pem file, keep it somewhere safe (needed for SSH access later)
+- Network settings > Edit: add a security group rule allowing Custom TCP, port 8000, source: Anywhere (0.0.0.0/0) — this is what makes your API publicly reachable. Also keep the default SSH, port 22 rule (usually pre-added) so you can debug if needed.
+- Storage: bump from default to 20 GiB
+- Advanced details > IAM instance profile: select the ec2-multiagent-rl-role you just created
+
+3. User data script — auto-pulls and runs your container on boot
+- Still in Advanced details, scroll to User data and paste this:
+bash#!/bin/bash
+yum install -y docker
+systemctl start docker
+systemctl enable docker
+
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 555984984896.dkr.ecr.us-east-1.amazonaws.com
+
+docker pull 555984984896.dkr.ecr.us-east-1.amazonaws.com/multiagent-rl-api:latest
+docker run -d -p 8000:8000 --name multiagent-api 555984984896.dkr.ecr.us-east-1.amazonaws.com/multiagent-rl-api:latest
+
+- This runs automatically the first time the instance boots — Amazon Linux 2023 already has the AWS CLI preinstalled, and since the instance has the IAM role attached, aws ecr get-login-password and the S3 model download inside the container both authenticate automatically, no keys needed anywhere.
+- Click Launch Instance.
+
+4. Wait, then find your public IP
+- Once status shows "Running," click into the instance and copy its Public IPv4 address. The user-data script needs a minute or two after boot to install Docker and pull the ~3GB image, so don't test immediately.
+- Try (after waiting ~2-3 minutes):
+http://<public-ip>:8000/docs
 

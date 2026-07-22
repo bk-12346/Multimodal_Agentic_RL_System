@@ -499,3 +499,9 @@ docker run -d -p 8000:8000 --name multiagent-api 555984984896.dkr.ecr.us-east-1.
 - Try (after waiting ~2-3 minutes):
 http://<public-ip>:8000/docs
 
+----> ssh -i "D:\Downloads\multiagent-rl.pem" ec2-user@16.170.170.85
+----> sudo cat /var/log/cloud-init-output.log
+----> sudo docker ps
+----> sudo docker logs multiagent-api
+----> http://16.170.170.85:8000/docs
+

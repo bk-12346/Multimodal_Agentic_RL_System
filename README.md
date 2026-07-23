@@ -21,7 +21,6 @@ This project treats multimodal RL as a real diagnostic problem, not just a train
 
 - **Mechanistic failure analysis** — when instruction-following was near chance, the fix wasn't "train longer," it was probing the policy's action distribution directly to confirm the language pathway was structurally dead, then redesigning the fusion architecture
 - **Honest generalization reporting** — held-out vocabulary and structural (grid size, distractor count) generalization tested separately, with failure modes documented at the mechanism level (e.g. the agent gets stuck in a stable oscillation loop near unfamiliar targets, rather than failing randomly)
-- **A negative result taken seriously** — a follow-up using pretrained text embeddings partially fixed the worst failure mode, but further training reversed the improvement; this instability is reported rather than hidden behind a single cherry-picked checkpoint
 - **Agentic reliability, not just an LLM wrapper** — the LLM planner's role was chosen specifically to cover a gap identified in testing: the RL policy's own confidence scores could not distinguish correct pickups from confidently-wrong ones, so the LLM verifies outcomes post-hoc instead
 - **Real deployment** — a live, containerized API on AWS, not just a notebook
 

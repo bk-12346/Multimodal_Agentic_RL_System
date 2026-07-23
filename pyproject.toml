@@ -15,6 +15,7 @@ dependencies = [
     "numpy>=2.5.1",
     "openai>=2.46.0",
     "pillow>=12.3.0",
+    "sagemaker>=3.16.0",
     "sentence-transformers>=5.6.0",
     "stable-baselines3>=2.9.0",
     "tensorboard>=2.21.0",

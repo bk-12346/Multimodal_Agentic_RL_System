@@ -560,3 +560,27 @@ sudo docker run -d -p 8000:8000 \
 - Condition: Greater than a threshold of, say, 0 (since any error at this small scale is worth flagging) — or 3 if you want to allow for occasional transient blips without spamming yourself
 - For notification: you can either set up an SNS topic + email subscription (more setup, sends you real emails) or skip notification and just let the alarm exist in "ALARM" state visibly in the console (simpler, still counts as implementing alerting logic even without the email wiring)
 
+------------------------------------------------------------------------------------------------------
+***** SET UP SAGEMAKER *****
+------------------------------------------------------------------------------------------------------
+1.  IAM setup — two separate things needed
+A- Give your bk-dev user permission to launch SageMaker jobs:
+IAM > Users > bk-dev > Add permissions > attach AmazonSageMakerFullAccess
+B- Create a SageMaker execution role (this is different — it's the role SageMaker itself assumes while running the training container, not your own user):
+IAM > Roles > Create role > Trusted entity: AWS service > Use case: SageMaker > Attach AmazonSageMakerFullAccess and AmazonS3FullAccess > name it sagemaker-multiagent-rl-role
+
+2. Install the SageMaker SDK locally
+- uv add sagemaker 
+
+3. sagemaker_training/train_script.py
+
+4. sagemaker_training/requirements.txt
+
+5. Copy your models/fusion_extractor.py, envs/wrappers.py, and configs/mission_vocab.json into a sagemaker_training/ subfolder structure so they get bundled:
+mkdir sagemaker_training/models, sagemaker_training/envs, sagemaker_training/configs
+copy models/fusion_extractor.py sagemaker_training/models/
+copy envs/wrappers.py sagemaker_training/envs/
+copy configs/mission_vocab.json sagemaker_training/configs/
+New-Item sagemaker_training/models/__init__.py, sagemaker_training/envs/__init__.py
+
+6. training/14_launch_sagemaker_job.py

@@ -2,6 +2,8 @@
 
 An end-to-end research system building a multimodal, instruction-conditioned reinforcement learning agent, diagnosing and fixing a real multimodal fusion failure, extending it with LLM-based agentic planning, and deploying it live on AWS.
 
+![Agent successfully fetching the requested object](./evaluation/demo_renders/demo_success_1_grey-ball.gif)
+
 ## Key Results
 
 | Configuration | Instruction-following accuracy | Notes |

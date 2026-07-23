@@ -505,3 +505,58 @@ http://<public-ip>:8000/docs
 ----> sudo docker logs multiagent-api
 ----> http://16.170.170.85:8000/docs
 
+------------------------------------------------------------------------------------------
+***** ADD CLOUDWATCH *****
+------------------------------------------------------------------------------------------
+1. Add CloudWatch permissions to the instance role
+- Go to IAM > Roles > ec2-multiagent-rl-role > Add permissions > Attach policies, add:
+-- CloudWatchLogsFullAccess
+-- CloudWatchFullAccess
+
+2. Update api/main.py
+- This does two things at once: logs every request to stdout (which we'll route to CloudWatch Logs via Docker's logging driver next),
+- and pushes three custom metrics — latency, request count, error count — directly to CloudWatch as native graphable data, 
+- to "Monitor: Latency / Requests / Errors" precisely.
+
+3. Rebuild and push the updated image
+- docker build -t multiagent-rl-api .
+- docker tag multiagent-rl-api:latest 555984984896.dkr.ecr.us-east-1.amazonaws.com/multiagent-rl-api:latest
+- docker push 555984984896.dkr.ecr.us-east-1.amazonaws.com/multiagent-rl-api:latest
+
+4. Redeploy on EC2 with CloudWatch log shipping enabled
+- ssh -i "D:\Downloads\multiagent-rl.pem" ec2-user@16.170.170.85
+
+
+sudo docker stop multiagent-api
+sudo docker rm multiagent-api
+
+sudo aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin 555984984896.dkr.ecr.us-east-1.amazonaws.com
+sudo docker pull 555984984896.dkr.ecr.us-east-1.amazonaws.com/multiagent-rl-api:latest
+
+sudo docker run -d -p 8000:8000 \
+  --log-driver=awslogs \
+  --log-opt awslogs-region=us-east-1 \
+  --log-opt awslogs-group=multiagent-rl-api \
+  --log-opt awslogs-create-group=true \
+  --name multiagent-api \
+  555984984896.dkr.ecr.us-east-1.amazonaws.com/multiagent-rl-api:latest
+
+5. Test out the UI Swagger
+- http://16.170.170.85:8000/docs
+
+6. Then check CloudWatch Logs
+- In the AWS Console, go to CloudWatch > Log groups, look for multiagent-rl-api. 
+- Click into it, then into the most recent log stream — you should see the same request log lines (GET /fetch -> 200 (43.2ms) style entries) that were previously only visible via docker logs.
+
+7. Then check the custom metrics
+- Go to CloudWatch > Metrics > All metrics, look for a custom namespace called MultiagentRLAPI in the list. 
+- Click into it — you should see RequestLatencyMs, RequestCount, and ErrorCount listed as available metrics. 
+- Select one (start with RequestLatencyMs) and it'll plot a graph — with only a handful of test requests it'll look sparse, but the presence of any plotted points confirms the whole pipeline (app → CloudWatch API call → stored metric → graphable) is working end to end.
+ 
+8. Add an error-rate alarm
+- Still in CloudWatch > Metrics, with ErrorCount selected, click into the metric detail (or go to Alarms > All alarms > Create alarm)
+- Select the ErrorCount metric from MultiagentRLAPI
+- Set the statistic to Sum, period 5 minutes
+- Condition: Greater than a threshold of, say, 0 (since any error at this small scale is worth flagging) — or 3 if you want to allow for occasional transient blips without spamming yourself
+- For notification: you can either set up an SNS topic + email subscription (more setup, sends you real emails) or skip notification and just let the alarm exist in "ALARM" state visibly in the console (simpler, still counts as implementing alerting logic even without the email wiring)
+

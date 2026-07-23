@@ -10,6 +10,9 @@ import gymnasium as gym
 import minigrid
 from stable_baselines3 import PPO
 
+import time
+import logging
+
 from envs.wrapper import MissionTokenizerWrapper
 
 BUCKET_NAME = "bk-multiagent-rl-2026"
@@ -21,6 +24,38 @@ MAX_STEPS = 100
 
 app = FastAPI(title="Multimodal Agentic RL API", version="0.1.0")
 _model = None
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("multiagent-api")
+
+_cloudwatch = boto3.client("cloudwatch", region_name="us-east-1")
+
+
+@app.middleware("http")
+async def log_and_monitor_requests(request, call_next):
+    start_time = time.time()
+    try:
+        response = await call_next(request)
+        duration_ms = (time.time() - start_time) * 1000
+
+        logger.info(f"{request.method} {request.url.path} -> {response.status_code} ({duration_ms:.1f}ms)")
+
+        _cloudwatch.put_metric_data(
+            Namespace="MultiagentRLAPI",
+            MetricData=[
+                {"MetricName": "RequestLatencyMs", "Value": duration_ms, "Unit": "Milliseconds"},
+                {"MetricName": "RequestCount", "Value": 1, "Unit": "Count"},
+                {"MetricName": "ErrorCount", "Value": 1 if response.status_code >= 400 else 0, "Unit": "Count"},
+            ],
+        )
+        return response
+    except Exception as e:
+        logger.error(f"{request.method} {request.url.path} -> EXCEPTION: {e}")
+        _cloudwatch.put_metric_data(
+            Namespace="MultiagentRLAPI",
+            MetricData=[{"MetricName": "ErrorCount", "Value": 1, "Unit": "Count"}],
+        )
+        raise
 
 
 @app.on_event("startup")
